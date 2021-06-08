@@ -1,0 +1,19 @@
+---
+# defaults file for machine-certs
+ca_cert_file: /etc/pki/tls/certs/classroom-ca.pem
+ca_private_key: /etc/pki/tls/private/classroom-ca-key.pem
+cert_path: /tmp/certs
+update_cert: False
+cert:
+  name: tower.cert
+  key: tower.key
+  csr: tower.csr
+  comment: "Classroom Tower Certificate"
+  common_name: tower.lab.example.com
+  alt_name: "DNS:tower.lab.example.com"
+  organization_name: Red Hat, Inc.
+  organizational_unit_name: Training
+  locality_name: Raleigh
+  state_or_province_name: NC
+  country_name: US
+  not_after: "+3650d"

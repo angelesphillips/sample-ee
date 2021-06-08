@@ -1,0 +1,79 @@
+---
+# tasks file for machine-certs
+- name: "Classroom CA: Check if {{ ca_cert_file }} exists"
+  stat:
+    path: "{{ ca_cert_file }}"
+  register: ca_cert_pem
+
+- name: "Classroom CA: Fail if {{ ca_cert_file }} does not exist"
+  fail:
+    msg: File "{{ ca_cert_file }}" does not exist.
+  when: ca_cert_pem.stat.exists|bool == False
+
+- name: "Classroom CA: Check if {{ ca_private_key }} exists"
+  stat:
+    path: "{{ ca_private_key }}"
+  register: ca_key_pem
+
+- name: "Classroom CA: Fail if {{ ca_private_key }} does not exist"
+  fail:
+    msg: File "{{ ca_private_key }}" does not exist.
+  when: ca_key_pem.stat.exists|bool == False
+
+- name: Create {{ cert_path }}
+  file:
+    path: "{{ cert_path }}"
+    state: directory
+
+- name: Check if {{ cert['name'] }} exists in {{ cert_path }}
+  stat:
+    path: "{{ cert_path }}/{{ cert['name'] }}"
+  register: cert_exists
+
+- name: Check if {{ cert['key'] }} exists in {{ cert_path }}
+  stat:
+    path: "{{ cert_path }}/{{ cert['key'] }}"
+  register: key_exists
+
+- block:
+    - name: Generate private key
+      openssl_privatekey:
+        path: "{{ cert_path }}/{{ cert['key'] }}"
+        mode: '0644'
+
+    - name: Generate CSR
+      openssl_csr:
+        path: "{{ cert_path }}/{{ cert['csr'] }}"
+        privatekey_path: "{{ cert_path }}/{{ cert['key'] }}"
+        common_name: "{{ cert['common_name'] }}"
+        subject_alt_name: "{{ cert['alt_name'] | default('DNS:' + cert['common_name']) }}"
+        organization_name: "{{ cert['organization_name'] }}"
+        organizational_unit_name: "{{ cert['organizational_unit_name'] }}"
+        locality_name: "{{ cert['locality_name'] }}"
+        state_or_province_name: "{{ cert['state_or_province_name'] }}"
+        country_name: "{{ cert['country_name'] }}"
+
+    - name: Generate certificate
+      community.crypto.x509_certificate:
+        path: "{{ cert_path }}/{{ cert['name'] }}"
+        provider: ownca
+        privatekey_path: "{{ cert_path }}/{{ cert['key'] }}"
+        csr_path: "{{ cert_path }}/{{ cert['csr'] }}"
+        ownca_not_after: "{{ cert['not_after'] }}"
+        ownca_path: "{{ ca_cert_file }}"
+        ownca_privatekey_path: "{{ ca_private_key }}"
+        force: true
+
+    - name: Add comment to top of the certificate
+      lineinfile:
+        insertbefore: BOF
+        path: "{{ cert_path }}/{{ cert['name'] }}"
+        line: "# {{ cert['comment'] | default('Generated certificate for classroom environment') }}"
+        state: present
+
+    - name: Remove CSR file
+      file:
+        path: "{{ cert_path }}/{{ cert['csr'] }}"
+        state: absent
+  when: (cert_exists['stat']['exists']|bool == False and key_exists['stat']['exists']|bool == False) or update_cert|bool == True
+
